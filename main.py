@@ -13,13 +13,12 @@ from loguru import logger
 from gitignore_parser import parse_gitignore
 from tempfile import mkstemp
 from paper import ArxivPaper
-from llm import set_global_llm # Assuming llm.py is in the same directory or accessible in PYTHONPATH
+from llm import set_global_llm # 假设 llm.py 在同一目录或在 PYTHONPATH 中可访问
 import feedparser
 
 def get_zotero_corpus(id:str,key:str) -> list[dict]:
     """
-    Retrieves and processes Zotero library items.
-    Ανακτά και επεξεργάζεται στοιχεία βιβλιοθήκης Zotero.
+    检索和处理 Zotero 图书馆条目。
     """
     logger.debug(f"Initializing Zotero client for user ID: {id}")
     zot = zotero.Zotero(id, 'user', key)
@@ -33,15 +32,13 @@ def get_zotero_corpus(id:str,key:str) -> list[dict]:
     corpus = zot.everything(zot.items(itemType='conferencePaper || journalArticle || preprint'))
     logger.debug(f"Fetched {len(corpus)} raw items.")
     
-    # Filter out items without abstracts
-    # Φιλτράρισμα στοιχείων χωρίς περιλήψεις
+    # 筛选没有摘要的条目
     corpus = [c for c in corpus if c['data'].get('abstractNote', '') != '']
     logger.debug(f"{len(corpus)} items remaining after filtering for abstracts.")
 
     def get_collection_path(col_key:str) -> str:
         """
-        Recursively builds the full path for a Zotero collection.
-        Δημιουργεί αναδρομικά την πλήρη διαδρομή για μια συλλογή Zotero.
+        递归构建 Zotero 集合的完整路径。
         """
         if not col_key or col_key not in collections:
             logger.warning(f"Collection key '{col_key}' not found in fetched collections. Returning empty path.")
@@ -70,8 +67,7 @@ def get_zotero_corpus(id:str,key:str) -> list[dict]:
 
 def filter_corpus(corpus:list[dict], pattern:str) -> list[dict]:
     """
-    Filters the Zotero corpus based on a gitignore-style pattern for collection paths.
-    Φιλτράρει το σώμα κειμένων Zotero βάσει ενός μοτίβου τύπου gitignore για τις διαδρομές συλλογών.
+    根据 gitignore 样式的集合路径模式筛选 Zotero 文集。
     """
     if not pattern:
         logger.info("No Zotero ignore pattern provided. Skipping filtering.")
@@ -110,8 +106,7 @@ def filter_corpus(corpus:list[dict], pattern:str) -> list[dict]:
 
 def get_arxiv_paper(query:str, debug:bool=False) -> list[ArxivPaper]:
     """
-    Retrieves new papers from arXiv based on a query.
-    Ανακτά νέες δημοσιεύσεις από το arXiv βάσει ενός ερωτήματος.
+    根据查询从 arXiv 检索新论文。
     """
     logger.info(f"Retrieving arXiv papers with query: '{query}', debug mode: {debug}")
     client = arxiv.Client(num_retries=10, page_size=100, delay_seconds=10)
@@ -134,27 +129,27 @@ def get_arxiv_paper(query:str, debug:bool=False) -> list[ArxivPaper]:
             for entry_idx, entry in enumerate(feed.entries):
                 announce_type = getattr(entry, 'arxiv_announce_type', None)
                 if announce_type == 'new':
-                    source_id_field = entry.get('id', '')  # <id> tag in Atom, e.g., http://arxiv.org/abs/xxxx.yyyyvN or oai:arXiv.org:xxxx.yyyy
-                    link_field = entry.get('link', '')    # <link rel="alternate">, usually http://arxiv.org/abs/xxxx.yyyyvN
+                    source_id_field = entry.get('id', '')  # Atom 中的 <id> 标签，例如 http://arxiv.org/abs/xxxx.yyyyvN 或 oai:arXiv.org:xxxx.yyyy
+                    link_field = entry.get('link', '')    # <link rel="alternate">，通常是 http://arxiv.org/abs/xxxx.yyyyvN
 
                     processed_id_candidate = None
 
-                    # Priority 1: Extract from link field (usually http://arxiv.org/abs/IDvV)
+                    # 优先级 1: 从链接字段提取 (通常是 http://arxiv.org/abs/IDvV)
                     if link_field and '/abs/' in link_field:
                         processed_id_candidate = link_field.split('/abs/')[-1]
-                    # Priority 2: Extract from id field if it's a URL (http://arxiv.org/abs/IDvV)
+                    # 优先级 2: 如果是 URL，则从 id 字段提取 (http://arxiv.org/abs/IDvV)
                     elif source_id_field and '/abs/' in source_id_field:
                         processed_id_candidate = source_id_field.split('/abs/')[-1]
-                    # Priority 3: Extract from id field if it's an OAI URN (oai:arXiv.org:ID or oai:arXiv.org:IDvV)
+                    # 优先级 3: 如果是 OAI URN，则从 id 字段提取 (oai:arXiv.org:ID 或 oai:arXiv.org:IDvV)
                     elif source_id_field and source_id_field.startswith('oai:arXiv.org:'):
                         processed_id_candidate = source_id_field.replace('oai:arXiv.org:', '')
-                    # Fallback for other potential simple ID formats in source_id_field
+                    # source_id_field 中其他潜在简单 ID 格式的回退方案
                     elif source_id_field and not ('/' in source_id_field or ':' in source_id_field or ' ' in source_id_field):
-                         # Assumes it might be a plain ID like "2401.12345" or "2401.12345v1"
+                         # 假设它可能是纯 ID，如 "2401.12345" 或 "2401.12345v1"
                          processed_id_candidate = source_id_field
 
                     if processed_id_candidate:
-                        # Remove version part (e.g., v1, v2) for consistency, though arxiv lib handles versions.
+                        # 为保持一致性，删除版本部分 (例如 v1, v2)，尽管 arxiv 库可以处理版本。
                         final_id = processed_id_candidate.split('v')[0]
                         if final_id: 
                             all_paper_ids.append(final_id)
@@ -176,12 +171,12 @@ def get_arxiv_paper(query:str, debug:bool=False) -> list[ArxivPaper]:
             batch_ids = all_paper_ids[i:i+batch_size]
             logger.debug(f"Fetching batch {i//batch_size + 1} with IDs: {batch_ids}")
             try:
-                search = arxiv.Search(id_list=batch_ids) # sort_by is not strictly needed for id_list
+                search = arxiv.Search(id_list=batch_ids) # sort_by 对于 id_list 不是严格必需的
                 batch_results = [ArxivPaper(p) for p in client.results(search)]
                 papers.extend(batch_results)
                 bar.update(len(batch_ids)) 
             except Exception as e:
-                # Log the specific error and the IDs that caused it
+                # 记录特定错误以及导致错误的 ID
                 logger.error(f"Error fetching batch {i//batch_size + 1} of arXiv papers (IDs: {batch_ids}): {e}")
         bar.close()
 
@@ -200,16 +195,14 @@ def get_arxiv_paper(query:str, debug:bool=False) -> list[ArxivPaper]:
     return papers
 
 
-# Argument parsing setup
-# Η παρακάτω ενότητα αφορά την ανάλυση των ορισμάτων της γραμμής εντολών
-parser = argparse.ArgumentParser(description='Recommender system for academic papers. Σύστημα προτάσεων για ακαδημαϊκές δημοσιεύσεις.')
+# 参数解析设置
+# 以下部分涉及命令行参数的解析
+parser = argparse.ArgumentParser(description='Recommender system for academic papers. 学术论文推荐系统。')
 
 def add_argument_with_env_fallback(*args, **kwargs):
     """
-    Adds an argument to the parser and sets its default value from an environment variable if available.
-    Handles type conversion for boolean and other types.
-    Προσθέτει ένα όρισμα στον αναλυτή και ορίζει την προεπιλεγμένη του τιμή από μια μεταβλητή περιβάλλοντος, εάν είναι διαθέσιμη.
-    Διαχειρίζεται τη μετατροπή τύπων για boolean και άλλους τύπους.
+    将参数添加到解析器，并从环境变量（如果可用）中设置其默认值。
+    处理布尔型和其他类型的类型转换。
     """
     arg_dest_name = kwargs.get('dest')
     if not arg_dest_name:
@@ -252,27 +245,26 @@ def add_argument_with_env_fallback(*args, **kwargs):
     parser.add_argument(*args, **kwargs)
 
 if __name__ == '__main__':
-    # Define arguments using the helper
-    # Ορισμός ορισμάτων χρησιμοποιώντας τη βοηθητική συνάρτηση
-    add_argument_with_env_fallback('--zotero_id', type=str, help='Zotero user ID. Αναγνωριστικό χρήστη Zotero.', required=False)
-    add_argument_with_env_fallback('--zotero_key', type=str, help='Zotero API key. Κλειδί API Zotero.', required=False)
-    add_argument_with_env_fallback('--zotero_ignore',type=str,help='Zotero collection to ignore, using gitignore-style pattern. Συλλογή Zotero προς παράβλεψη, χρησιμοποιώντας μοτίβο τύπου gitignore.', default="")
-    add_argument_with_env_fallback('--send_empty', action='store_true', help='If get no arxiv paper, send empty email (default: False). Εάν δεν βρεθούν δημοσιεύσεις arXiv, αποστολή κενού email (προεπιλογή: False).')
-    add_argument_with_env_fallback('--max_paper_num', type=int, help='Maximum number of papers to recommend (default: 100, -1 for no limit). Μέγιστος αριθμός προτεινόμενων δημοσιεύσεων (προεπιλογή: 100, -1 για κανένα όριο).',default=100)
-    add_argument_with_env_fallback('--arxiv_query', type=str, help='Arxiv search query. Ερώτημα αναζήτησης Arxiv.', required=False)
-    add_argument_with_env_fallback('--smtp_server', type=str, help='SMTP server. Διακομιστής SMTP.', required=False)
-    add_argument_with_env_fallback('--smtp_port', type=int, help='SMTP port. Θύρα SMTP.', default=587)
-    add_argument_with_env_fallback('--sender', type=str, help='Sender email address. Διεύθυνση email αποστολέα.', required=False)
-    add_argument_with_env_fallback('--receiver', type=str, help='Receiver email address. Διεύθυνση email παραλήπτη.', required=False)
-    add_argument_with_env_fallback('--sender_password', type=str, help='Sender email password. Κωδικός πρόσβασης email αποστολέα.', required=False)
-    add_argument_with_env_fallback("--use_llm_api", action='store_true', help="Use OpenAI API to generate TLDR (default: False). Χρήση OpenAI API για δημιουργία TLDR (προεπιλογή: False).")
-    add_argument_with_env_fallback("--openai_api_key", type=str, help="OpenAI API key (required if --use_llm_api is set). Κλειδί OpenAI API (απαιτείται εάν έχει οριστεί το --use_llm_api).", default=None)
-    add_argument_with_env_fallback("--openai_api_base", type=str, help="OpenAI API base URL. Βασική διεύθυνση URL OpenAI API.", default="https://api.openai.com/v1")
-    add_argument_with_env_fallback("--model_name", type=str, help="LLM Model Name. Όνομα μοντέλου LLM.", default="gpt-4o")
-    add_argument_with_env_fallback("--language", type=str, help="Language of TLDR. Γλώσσα του TLDR.", default="English")
-    add_argument_with_env_fallback("--openai_timeout", type=float, help="Timeout for OpenAI API requests in seconds (default: 60.0). Χρονικό όριο για αιτήματα OpenAI API σε δευτερόλεπτα (προεπιλογή: 60.0).", default=60.0)
-    add_argument_with_env_fallback("--openai_max_retries", type=int, help="Maximum number of retries for OpenAI API requests (default: 3). Μέγιστος αριθμός επαναδοκιμών για αιτήματα OpenAI API (προεπιλογή: 3).", default=3)
-    parser.add_argument('--debug', action='store_true', help='Debug mode (default: False). Λειτουργία εντοπισμού σφαλμάτων (προεπιλογή: False).')
+    # 使用辅助函数定义参数
+    add_argument_with_env_fallback('--zotero_id', type=str, help='Zotero user ID. Zotero 用户 ID。', required=False)
+    add_argument_with_env_fallback('--zotero_key', type=str, help='Zotero API key. Zotero API 密钥。', required=False)
+    add_argument_with_env_fallback('--zotero_ignore',type=str,help='Zotero collection to ignore, using gitignore-style pattern. 要忽略的 Zotero 集合，使用 gitignore 样式模式。', default="")
+    add_argument_with_env_fallback('--send_empty', action='store_true', help='If get no arxiv paper, send empty email (default: False). 如果没有 arXiv 论文，则发送空邮件（默认值：False）。')
+    add_argument_with_env_fallback('--max_paper_num', type=int, help='Maximum number of papers to recommend (default: 100, -1 for no limit). 推荐论文的最大数量（默认值：100，-1 表示无限制）。',default=100)
+    add_argument_with_env_fallback('--arxiv_query', type=str, help='Arxiv search query. Arxiv 搜索查询。', required=False)
+    add_argument_with_env_fallback('--smtp_server', type=str, help='SMTP server. SMTP 服务器。', required=False)
+    add_argument_with_env_fallback('--smtp_port', type=int, help='SMTP port. SMTP 端口。', default=587)
+    add_argument_with_env_fallback('--sender', type=str, help='Sender email address. 发件人电子邮件地址。', required=False)
+    add_argument_with_env_fallback('--receiver', type=str, help='Receiver email address. 收件人电子邮件地址。', required=False)
+    add_argument_with_env_fallback('--sender_password', type=str, help='Sender email password. 发件人电子邮件密码。', required=False)
+    add_argument_with_env_fallback("--use_llm_api", action='store_true', help="Use OpenAI API to generate TLDR (default: False). 使用 OpenAI API 生成 TLDR（默认值：False）。")
+    add_argument_with_env_fallback("--openai_api_key", type=str, help="OpenAI API key (required if --use_llm_api is set). OpenAI API 密钥（如果设置了 --use_llm_api，则为必需）。", default=None)
+    add_argument_with_env_fallback("--openai_api_base", type=str, help="OpenAI API base URL. OpenAI API 基本 URL。", default="https://api.openai.com/v1")
+    add_argument_with_env_fallback("--model_name", type=str, help="LLM Model Name. LLM 模型名称。", default="gpt-4o")
+    add_argument_with_env_fallback("--language", type=str, help="Language of TLDR. TLDR 的语言。", default="English")
+    add_argument_with_env_fallback("--openai_timeout", type=float, help="Timeout for OpenAI API requests in seconds (default: 60.0). OpenAI API 请求的超时时间（秒）（默认值：60.0）。", default=60.0)
+    add_argument_with_env_fallback("--openai_max_retries", type=int, help="Maximum number of retries for OpenAI API requests (default: 3). OpenAI API 请求的最大重试次数（默认值：3）。", default=3)
+    parser.add_argument('--debug', action='store_true', help='Debug mode (default: False). 调试模式（默认值：False）。')
     args = parser.parse_args()
 
     if args.debug:
